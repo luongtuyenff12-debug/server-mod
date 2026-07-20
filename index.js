@@ -21,10 +21,11 @@ const CONFIG = {
   KEYVAULT_URL:        process.env.KEYVAULT_URL  || null,
   KEYVAULT_SECRET:     process.env.KEYVAULT_SECRET || null,
   ADMIN_SECRET:        process.env.ADMIN_SECRET  || 'changeme',
+  // Mật khẩu đăng nhập Web Admin UI
+  ADMIN_PASSWORD:      process.env.ADMIN_PASSWORD || '120510@',
 };
 
-// Keys lưu trong memory (reset khi restart) — đổi sang file nếu cần persist
-// Hoặc đặt KEYS_FILE_PATH để dùng file JSON
+// Keys lưu trong memory (reset khi restart) — đặt KEYS_FILE_PATH để persist
 const KEYS_FILE = process.env.KEYS_FILE_PATH || null;
 let KEYS = {};
 if (KEYS_FILE && fs.existsSync(KEYS_FILE)) {
@@ -39,7 +40,7 @@ function saveKeys() {
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());
 
-// Rate limit chỉ áp dụng cho /loadlibv16 — KHÔNG áp dụng cho /admin và trang web
+// Rate limit chỉ áp dụng cho /loadlibv16
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, max: 30,
   standardHeaders: true, legacyHeaders: false,
@@ -47,7 +48,7 @@ const apiLimiter = rateLimit({
 });
 app.use('/loadlibv16', apiLimiter);
 
-// ─── CORS — cho phép web admin truy cập ──────────────────────────────────────
+// ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type, x-admin-secret');
@@ -60,6 +61,15 @@ app.use((req, res, next) => {
 function err(res, code, detail, http = 400) {
   return res.status(http).json({ status: code, error: detail, message: `Server returned error: ${http}` });
 }
+
+// ─── Admin password check endpoint ───────────────────────────────────────────
+app.post('/admin/login', (req, res) => {
+  const { password } = req.body || {};
+  if (password === CONFIG.ADMIN_PASSWORD) {
+    return res.json({ success: true });
+  }
+  return res.status(401).json({ success: false, error: 'Sai mật khẩu' });
+});
 
 // ─── Key validation ───────────────────────────────────────────────────────────
 async function validateKey(key, hwid) {
@@ -114,7 +124,7 @@ app.all('/loadlibv16/check.php', async (req, res) => {
   });
 });
 
-// ─── GET /loadlibv16/:file — redirect tới CDN ────────────────────────────────
+// ─── GET /loadlibv16/:file ────────────────────────────────────────────────────
 app.get('/loadlibv16/:libFile', (req, res) => {
   const ua = req.headers['user-agent'] || '';
   if (!ua.includes(CONFIG.HTTP_USER_AGENT)) return err(res, 'UA_BLOCKED', 'User-Agent không hợp lệ', 403);
@@ -123,6 +133,7 @@ app.get('/loadlibv16/:libFile', (req, res) => {
   res.redirect(302, libEntry.file_url);
 });
 
+// ─── Admin API ────────────────────────────────────────────────────────────────
 function genKey(prefix = 'KEY') {
   const r = crypto.randomBytes(6).toString('hex').toUpperCase();
   return `${prefix}-${r.slice(0,4)}-${r.slice(4,8)}-${r.slice(8,12)}`;
@@ -173,6 +184,25 @@ app.get('/', (req, res) => {
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;min-height:100vh}
 
+/* ── Login Screen ── */
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+#login-screen.hidden{display:none}
+.login-box{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:36px 28px;width:100%;max-width:360px;text-align:center}
+.login-logo{width:60px;height:60px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 20px}
+.login-title{font-size:20px;font-weight:700;margin-bottom:4px}
+.login-sub{font-size:13px;color:var(--muted);margin-bottom:28px}
+.login-field{text-align:left;margin-bottom:16px}
+.login-field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+.login-field input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;padding:12px 14px;outline:none;transition:border-color .15s}
+.login-field input:focus{border-color:var(--accent)}
+.login-btn{width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:600;cursor:pointer;margin-top:4px;transition:opacity .15s}
+.login-btn:hover{opacity:.9}
+.login-btn:active{opacity:.8}
+.login-err{color:var(--red);font-size:13px;margin-top:12px;min-height:20px}
+.login-loader{display:inline-block;width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── App ── */
 label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:500;letter-spacing:.5px;text-transform:uppercase}
 input,select{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:14px;padding:10px 12px;outline:none;transition:border-color .15s}
 input:focus,select:focus{border-color:var(--accent)}
@@ -192,6 +222,8 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .header-logo{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px}
 .header-title{font-weight:600;font-size:15px}
 .server-url{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.logout-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer;transition:all .15s}
+.logout-btn:hover{color:var(--text);border-color:var(--text)}
 .nav-tabs{display:flex;gap:4px;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
 .nav-tabs::-webkit-scrollbar{display:none}
 .tab{padding:7px 14px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;color:var(--muted);background:none;border:none;white-space:nowrap;transition:all .15s}
@@ -204,7 +236,6 @@ main{flex:1;padding:20px;max-width:900px;margin:0 auto;width:100%}
 .stat-value{font-size:26px;font-weight:600;font-family:var(--mono)}
 .stat-value.green{color:var(--green)}
 .stat-value.yellow{color:var(--yellow)}
-.stat-value.red{color:var(--red)}
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:16px}
 .card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .card-title{font-size:14px;font-weight:600}
@@ -249,8 +280,23 @@ tr:hover td{background:rgba(255,255,255,.02)}
 </head>
 <body>
 
+<!-- ── Login Screen ── -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">🔑</div>
+    <div class="login-title">Key Admin</div>
+    <div class="login-sub">Đăng nhập để tiếp tục</div>
+    <div class="login-field">
+      <label>Mật khẩu</label>
+      <input id="pw-input" type="password" placeholder="Nhập mật khẩu..." onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Đăng nhập</button>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
 
-<div id="app" class="show">
+<!-- ── Main App ── -->
+<div id="app">
   <header>
     <div class="header-left">
       <div class="header-logo">🔑</div>
@@ -259,6 +305,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
         <div class="server-url" id="disp-url"></div>
       </div>
     </div>
+    <button class="logout-btn" onclick="doLogout()">🚪 Đăng xuất</button>
   </header>
   <nav class="nav-tabs">
     <button class="tab active" onclick="switchTab('keys',this)">📋 Danh sách Keys</button>
@@ -338,6 +385,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
   </main>
 </div>
 
+<!-- Modals -->
 <div class="modal-backdrop" id="modal-edit">
   <div class="modal">
     <h2>✏️ Chỉnh sửa Key</h2>
@@ -370,16 +418,73 @@ tr:hover td{background:rgba(255,255,255,.02)}
 <script>
 const SERVER = window.location.origin;
 let ALL_KEYS = [];
+let IS_LOGGED_IN = false;
 
+// ── Login / Logout ──────────────────────────────────────────────────────────
+function doLogin(){
+  const pw = document.getElementById('pw-input').value;
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('login-err');
+  if(!pw){errEl.textContent='Vui lòng nhập mật khẩu';return;}
+  btn.disabled=true;
+  btn.innerHTML='<span class="login-loader"></span>Đang xác thực...';
+  errEl.textContent='';
+  fetch(SERVER+'/admin/login',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({password:pw})
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    btn.disabled=false;
+    btn.textContent='Đăng nhập';
+    if(d.success){
+      IS_LOGGED_IN=true;
+      sessionStorage.setItem('admin_auth','1');
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('app').classList.add('show');
+      initApp();
+    } else {
+      errEl.textContent='❌ '+(d.error||'Sai mật khẩu');
+      document.getElementById('pw-input').focus();
+    }
+  })
+  .catch(()=>{
+    btn.disabled=false;
+    btn.textContent='Đăng nhập';
+    errEl.textContent='❌ Không kết nối được server';
+  });
+}
+
+function doLogout(){
+  IS_LOGGED_IN=false;
+  sessionStorage.removeItem('admin_auth');
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('pw-input').value='';
+  document.getElementById('login-err').textContent='';
+}
+
+// Auto-login nếu session còn
+if(sessionStorage.getItem('admin_auth')==='1'){
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').classList.add('show');
+  IS_LOGGED_IN=true;
+  // initApp sẽ được gọi sau khi DOM load xong
+  document.addEventListener('DOMContentLoaded', initApp);
+}
+
+// ── API helper ──────────────────────────────────────────────────────────────
 function api(path,method='GET',body=null){
   const opts={method,headers:{'Content-Type':'application/json'}};
   if(body)opts.body=JSON.stringify(body);
   return fetch(SERVER+path,opts);
 }
 
+// ── Load & Render Keys ──────────────────────────────────────────────────────
 function loadKeys(){
   var tbody=document.getElementById('keys-body');
-  if(tbody)tbody.innerHTML='<tr><td colspan="6" class="empty">Dang tai...</td></tr>';
+  if(tbody)tbody.innerHTML='<tr><td colspan="6" class="empty">Đang tải...</td></tr>';
   api('/admin/keys')
     .then(function(r){
       if(!r.ok) throw new Error('HTTP '+r.status);
@@ -392,11 +497,10 @@ function loadKeys(){
     })
     .catch(function(e){
       var msg=e.message||'unknown';
-      if(tbody)tbody.innerHTML='<tr><td colspan="6" class="empty" style="color:var(--red)">Loi tai keys: '+msg+' &mdash; <button class=\'btn btn-ghost btn-sm\' onclick=\'loadKeys()\'>Thu lai</button></td></tr>';
-      toast('Loi tai: '+msg,'err');
+      if(tbody)tbody.innerHTML='<tr><td colspan="6" class="empty" style="color:var(--red)">Lỗi tải keys: '+msg+' &mdash; <button class="btn btn-ghost btn-sm" onclick="loadKeys()">Thử lại</button></td></tr>';
+      toast('Lỗi tải: '+msg,'err');
     });
 }
-
 
 function filterKeys(){
   const q=document.getElementById('search').value.toLowerCase();
@@ -434,6 +538,7 @@ function updateStats(keys){
   document.getElementById('s-used').textContent=keys.filter(k=>k.hwid).length;
 }
 
+// ── Create Keys ─────────────────────────────────────────────────────────────
 function createKeys(){
   const prefix=document.getElementById('c-prefix').value.trim()||'KEY';
   const count=parseInt(document.getElementById('c-count').value)||1;
@@ -449,6 +554,7 @@ function createKeys(){
     }).catch(()=>toast('Lỗi tạo keys','err'));
 }
 
+// ── Edit Key ────────────────────────────────────────────────────────────────
 function openEdit(k){
   document.getElementById('edit-key').value=k.key;
   document.getElementById('edit-key-disp').value=k.key;
@@ -469,6 +575,7 @@ function saveEdit(){
     .catch(()=>toast('Lỗi lưu','err'));
 }
 
+// ── Delete Key ──────────────────────────────────────────────────────────────
 let pendingDelete='';
 function openDelete(key){pendingDelete=key;document.getElementById('del-key-disp').textContent=key;document.getElementById('modal-del').classList.add('open');}
 function confirmDelete(){
@@ -477,6 +584,7 @@ function confirmDelete(){
     .catch(()=>toast('Lỗi xoá','err'));
 }
 
+// ── Reset HWID ──────────────────────────────────────────────────────────────
 function resetHwid(key){
   if(!confirm('Reset HWID cho key:\\n'+key+'?'))return;
   api('/admin/keys/'+encodeURIComponent(key)+'/reset-hwid','POST')
@@ -484,6 +592,7 @@ function resetHwid(key){
     .catch(()=>toast('Lỗi reset HWID','err'));
 }
 
+// ── Test API ────────────────────────────────────────────────────────────────
 function testApi(){
   const key=document.getElementById('t-key').value.trim();
   const hwid=document.getElementById('t-hwid').value.trim();
@@ -499,11 +608,7 @@ function testApi(){
     })).catch(e=>{el.textContent='Lỗi: '+e.message;el.style.color='var(--red)';});
 }
 
-function setEndpoints(){
-  document.getElementById('ep-check').textContent='POST '+SERVER+'/loadlibv16/check.php\\nUser-Agent: CakModsLoader\\nBody: { "key": "...", "hwid": "...", "lib": "libCakMods.so" }';
-  document.getElementById('ep-admin').textContent='GET '+SERVER+'/admin/keys\\nHeader: x-admin-secret: ••••••';
-}
-
+// ── Tabs ────────────────────────────────────────────────────────────────────
 function switchTab(page,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
@@ -513,6 +618,7 @@ function switchTab(page,el){
   if(page==='keys')loadKeys();
 }
 
+// ── Modal / Toast ───────────────────────────────────────────────────────────
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 
 function copyText(txt){
@@ -527,7 +633,13 @@ function toast(msg,type='ok'){
   toastTimer=setTimeout(()=>el.className='',2200);
 }
 
-function init(){
+// ── Init ────────────────────────────────────────────────────────────────────
+function setEndpoints(){
+  document.getElementById('ep-check').textContent='POST '+SERVER+'/loadlibv16/check.php\\nUser-Agent: CakModsLoader\\nBody: { "key": "...", "hwid": "...", "lib": "libCakMods.so" }';
+  document.getElementById('ep-admin').textContent='GET '+SERVER+'/admin/keys\\nHeader: x-admin-secret: ••••••';
+}
+
+function initApp(){
   document.getElementById('disp-url').textContent=SERVER.replace('https://','').replace('http://','');
   setEndpoints();
   loadKeys();
@@ -537,8 +649,8 @@ window.addEventListener('keydown',e=>{
   if(e.key==='Escape')document.querySelectorAll('.modal-backdrop.open').forEach(m=>m.classList.remove('open'));
 });
 
-// Gọi init() ngay khi script parse xong (DOM đã sẵn sàng vì script ở cuối body)
-init();
+// Tự động focus input mật khẩu
+document.getElementById('pw-input') && document.getElementById('pw-input').focus();
 </script>
 </body>
 </html>`);
