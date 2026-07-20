@@ -371,13 +371,6 @@ tr:hover td{background:rgba(255,255,255,.02)}
 const SERVER = window.location.origin;
 let ALL_KEYS = [];
 
-// Tự động load keys khi trang mở
-window.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('disp-url').textContent = SERVER.replace('https://','');
-  setEndpoints();
-  loadKeys();
-});
-
 function api(path,method='GET',body=null){
   const opts={method,headers:{'Content-Type':'application/json'}};
   if(body)opts.body=JSON.stringify(body);
@@ -385,12 +378,25 @@ function api(path,method='GET',body=null){
 }
 
 function loadKeys(){
-  api('/admin/keys').then(r=>r.json()).then(d=>{
-    ALL_KEYS=d.keys||[];
-    renderKeys(ALL_KEYS);
-    updateStats(ALL_KEYS);
-  }).catch(()=>toast('Lỗi tải keys','err'));
+  var tbody=document.getElementById('keys-body');
+  if(tbody)tbody.innerHTML='<tr><td colspan="6" class="empty">Dang tai...</td></tr>';
+  api('/admin/keys')
+    .then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return r.json();
+    })
+    .then(function(d){
+      ALL_KEYS=d.keys||[];
+      renderKeys(ALL_KEYS);
+      updateStats(ALL_KEYS);
+    })
+    .catch(function(e){
+      var msg=e.message||'unknown';
+      if(tbody)tbody.innerHTML='<tr><td colspan="6" class="empty" style="color:var(--red)">Loi tai keys: '+msg+' &mdash; <button class=\'btn btn-ghost btn-sm\' onclick=\'loadKeys()\'>Thu lai</button></td></tr>';
+      toast('Loi tai: '+msg,'err');
+    });
 }
+
 
 function filterKeys(){
   const q=document.getElementById('search').value.toLowerCase();
@@ -434,7 +440,7 @@ function createKeys(){
   const expires=document.getElementById('c-expires').value;
   const note=document.getElementById('c-note').value.trim();
   api('/admin/keys','POST',{prefix,count,expires:expires?new Date(expires).toISOString():null,note})
-    .then(r=>r.json()).then(d=>{
+    .then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(d=>{
       if(!d.created){toast('Lỗi tạo keys','err');return;}
       document.getElementById('created-list').textContent=d.created.join('\\n');
       document.getElementById('created-box').style.display='block';
@@ -502,7 +508,8 @@ function switchTab(page,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   document.querySelectorAll('#page-keys,#page-create,#page-test').forEach(p=>p.classList.remove('active'));
-  document.getElementById('page-'+page).classList.add('active');
+  var pg=document.getElementById('page-'+page);
+  if(pg)pg.classList.add('active');
   if(page==='keys')loadKeys();
 }
 
@@ -520,9 +527,18 @@ function toast(msg,type='ok'){
   toastTimer=setTimeout(()=>el.className='',2200);
 }
 
+function init(){
+  document.getElementById('disp-url').textContent=SERVER.replace('https://','').replace('http://','');
+  setEndpoints();
+  loadKeys();
+}
+
 window.addEventListener('keydown',e=>{
   if(e.key==='Escape')document.querySelectorAll('.modal-backdrop.open').forEach(m=>m.classList.remove('open'));
 });
+
+// Gọi init() ngay khi script parse xong (DOM đã sẵn sàng vì script ở cuối body)
+init();
 </script>
 </body>
 </html>`);
