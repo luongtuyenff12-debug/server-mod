@@ -1,0 +1,16 @@
+{
+  "name": "telegram-server",
+  "version": "1.0.0",
+  "description": "Telegram Bot server xác thực key & ID Free Fire",
+  "main": "telegram-server.js",
+  "scripts": {
+    "start": "node telegram-server.js"
+  },
+  "dependencies": {
+    "@sparticuz/chromium": "^123.0.1",
+    "puppeteer-core": "^22.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
