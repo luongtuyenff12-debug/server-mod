@@ -8,7 +8,9 @@
   },
   "dependencies": {
     "@sparticuz/chromium": "^123.0.1",
-    "puppeteer-core": "^22.6.0"
+    "puppeteer-core": "^22.6.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
   },
   "engines": {
     "node": ">=18.0.0"
